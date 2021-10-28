@@ -1,4 +1,5 @@
 import os
+import time
 import yaml
 import logging
 import argparse
@@ -45,6 +46,22 @@ class GitHub:
             }
         )
 
+    def rateLimitCheck(self, responce):
+        """
+        Check the rate limit
+        :param responce:
+        :return:
+        """
+        ratelimit = int(responce.headers.get("X-RateLimit-Reset"))
+        until = responce.headers.get("X-RateLimit-Reset")
+        logging.debug(f"Rate limit: {ratelimit}")
+        if ratelimit <= 1:
+            logging.info("Rate limit reached, reset at {until}")
+            # wait until reset
+            while int(until) > int(time.time()):
+                time.sleep(1)
+                logging.info(f"Waiting until {until}")
+
     def createProject(self, name: str, description: str):
         """
         Create a new GitHub project from a markdown file
@@ -58,6 +75,7 @@ class GitHub:
             f"https://api.github.com/repos/{self.repository}/projects",
             json={"name": name, "body": description},
         ) as response:
+            self.rateLimitCheck(response)
             if response.status_code == 201:
                 return response.json()
             raise Exception(response.json())
@@ -73,6 +91,7 @@ class GitHub:
             f"https://api.github.com/projects/{project_id}/columns",
             json={"name": name},
         ) as response:
+            self.rateLimitCheck(response)
             if response.status_code == 201:
                 return response.json()
             raise Exception(response.json())
@@ -97,6 +116,7 @@ class GitHub:
                 "assignees": assignees,
             },
         ) as response:
+            self.rateLimitCheck(response)
             if response.status_code == 201:
                 return response.json()
             raise Exception(response.json())
@@ -113,6 +133,7 @@ class GitHub:
             f"https://api.github.com/projects/columns/{column_id}/cards",
             json={"content_id": issue_id, "content_type": "Issue"},
         ) as response:
+            self.rateLimitCheck(response)
             if response.status_code == 201:
                 return response.json()
             raise Exception(response.json())
@@ -168,7 +189,9 @@ if __name__ == "__main__":
                 break
 
         if column_id is None:
-            logging.warning(f"No column found for '{issue.name}' ()")
+            logging.warning(
+                f"No column found for '{issue.name}' (using default column)"
+            )
             # set to default column
             column_id = default_column
 
